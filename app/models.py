@@ -109,3 +109,13 @@ class AuditLog(Base):
     entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)
+    success: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False, index=True)

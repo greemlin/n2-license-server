@@ -144,9 +144,9 @@ def _utc_now() -> datetime:
     return now.replace(tzinfo=None) if now.tzinfo else now
 
 
-def _normalize_dt(value: datetime | None) -> datetime | None:
+def _normalize_dt(value: datetime | None) -> datetime:
     if value is None:
-        return None
+        raise ValueError("expected a datetime value")
     return value.replace(tzinfo=None) if value.tzinfo else value
 
 

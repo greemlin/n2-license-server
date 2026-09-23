@@ -18,7 +18,7 @@ _SessionLocal: sessionmaker[Session] | None = None
 
 def _migrate_sqlite(engine: Engine) -> None:
     """Add any columns that exist in models but not yet in the SQLite DB."""
-    from sqlalchemy import Column, inspect, text
+    from sqlalchemy import inspect, text
 
     inspector = inspect(engine)
     for table in Base.metadata.tables.values():

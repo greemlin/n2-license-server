@@ -7,6 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -32,11 +34,45 @@ from app.models import (
     LicenseActivation,
     LicenseKey,
     LockOrder,
+    LoginAttempt,
     Release,
 )
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
+login_limiter = Limiter(key_func=get_remote_address)
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+LOGIN_LOCKOUT_MINUTES = 15
+
+
+# --------------------------------------------------------------------------- #
+# Brute-force protection helpers
+# --------------------------------------------------------------------------- #
+
+
+def _recent_failed_logins(db: Session, ip_address: str, username: str) -> int:
+    window = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+    return db.scalar(
+        select(func.count(LoginAttempt.id)).where(
+            LoginAttempt.success == False,
+            LoginAttempt.attempted_at >= window,
+            ((LoginAttempt.ip_address == ip_address) | (LoginAttempt.username == username)),
+        )
+    ) or 0
+
+
+def _record_login_attempt(db: Session, ip_address: str, username: str, success: bool) -> None:
+    attempt = LoginAttempt(
+        ip_address=ip_address,
+        username=username,
+        success=success,
+    )
+    db.add(attempt)
+    db.commit()
+
+
+def _login_blocked(db: Session, ip_address: str, username: str) -> bool:
+    return _recent_failed_logins(db, ip_address, username) >= MAX_FAILED_LOGIN_ATTEMPTS
 
 
 # --------------------------------------------------------------------------- #
@@ -76,24 +112,53 @@ def _get_client_ip(request: Request) -> str:
 
 
 @router.get("/login", response_class=HTMLResponse, response_model=None)
-def login_page(request: Request, error: str = "") -> HTMLResponse | RedirectResponse:
+def login_page(
+    request: Request,
+    error: str = "",
+    db: Session = Depends(get_db),
+) -> HTMLResponse | RedirectResponse:
     admin = get_current_admin(request)
     if admin:
         return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    ip = _get_client_ip(request)
+    blocked = _login_blocked(db, ip, "")
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"request": request, "error": error, "title": "Admin Login"},
+        {
+            "request": request,
+            "error": error,
+            "title": "Admin Login",
+            "blocked": blocked,
+        },
     )
 
 
 @router.post("/login")
+@login_limiter.limit("10/minute")
 def login_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    db: Session = Depends(get_db),
 ) -> Any:
     settings = get_settings()
+    ip_address = _get_client_ip(request)
+
+    if _login_blocked(db, ip_address, username):
+        _record_login_attempt(db, ip_address, username, False)
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "request": request,
+                "error": "Too many failed attempts. Wait 15 minutes or contact support.",
+                "title": "Admin Login",
+                "blocked": True,
+            },
+            status_code=429,
+        )
+
     expected_hash = settings.admin_password_hash
     if not expected_hash:
         return templates.TemplateResponse(
@@ -108,14 +173,16 @@ def login_submit(
         )
 
     if username == settings.admin_username and verify_password(password, expected_hash):
+        _record_login_attempt(db, ip_address, username, True)
         redirect = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
         create_session(redirect, username, secure=request.url.scheme == "https")
         return redirect
 
+    _record_login_attempt(db, ip_address, username, False)
     log_audit(
         "admin_login_failed",
         actor=username,
-        ip_address=_get_client_ip(request),
+        ip_address=ip_address,
     )
     return templates.TemplateResponse(
         request,
@@ -124,6 +191,7 @@ def login_submit(
             "request": request,
             "error": "Invalid username or password.",
             "title": "Admin Login",
+            "blocked": _login_blocked(db, ip_address, username),
         },
         status_code=401,
     )
@@ -246,8 +314,8 @@ async def create_key(
     if not never_expires and expires_at:
         try:
             expires_dt = datetime.strptime(expires_at, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(status_code=422, detail="Invalid expiration date. Use YYYY-MM-DD.")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid expiration date. Use YYYY-MM-DD.") from exc
 
     for _ in range(5):
         key_text = _generate_key_text()

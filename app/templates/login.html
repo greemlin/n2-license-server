@@ -20,10 +20,12 @@
             </a>
         </div>
         <h2>Administrator Login</h2>
-        {% if error %}
+        {% if blocked %}
+        <div class="alert alert-danger">This account is temporarily locked due to too many failed login attempts. Please wait 15 minutes or contact support.</div>
+        {% elif error %}
         <div class="alert alert-danger">{{ error }}</div>
         {% endif %}
-        <form method="post" action="/admin/login">
+        <form method="post" action="/admin/login" {% if blocked %}style="opacity:0.6;pointer-events:none;"{% endif %}>
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required autofocus>
