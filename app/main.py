@@ -48,6 +48,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.limiter = limiter
+app.state.product_name = settings.product_name
 app.add_exception_handler(429, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -88,13 +89,14 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.get("/", response_class=HTMLResponse)
 def root() -> HTMLResponse:
+    settings = get_settings()
     return HTMLResponse(
-        """<!DOCTYPE html>
+        f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>N2 License Server</title>
+    <title>{settings.product_name} License Server</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
