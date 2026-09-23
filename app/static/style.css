@@ -22,7 +22,12 @@ html, body {
     color: var(--text);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    overflow: hidden;
 }
+
+/* Hide scrollbars everywhere */
+::-webkit-scrollbar { display: none; }
+html { scrollbar-width: none; }
 
 .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
 .copper-text { color: var(--primary); }
@@ -136,7 +141,15 @@ html, body {
     padding: 32px;
     max-width: calc(100% - 260px);
     min-height: 100vh;
+    max-height: 100vh;
     background: var(--bg);
+    overflow-y: auto;
+}
+
+.main-full {
+    margin-left: 0;
+    max-width: 100%;
+    padding: 0;
 }
 
 .topbar {
