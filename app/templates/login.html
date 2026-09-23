@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login — N2 License Server{% endblock %}
+{% block page_title %}{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="brand">
+            <div class="brand-mark">N2</div>
+            <div class="brand-name">License Server</div>
+        </div>
+        <h2>Administrator Login</h2>
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/admin/login">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

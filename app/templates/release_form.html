@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Create Release — N2 License Server{% endblock %}
+{% block page_title %}Create Release{% endblock %}
+
+{% block content %}
+<div class="card narrow">
+    <form method="post" action="/admin/releases">
+        <div class="form-group">
+            <label for="version">Version</label>
+            <input type="text" id="version" name="version" placeholder="e.g. 1.2.0" required>
+        </div>
+        <div class="form-group">
+            <label for="channel">Channel</label>
+            <select id="channel" name="channel">
+                <option value="stable">stable</option>
+                <option value="beta">beta</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="download_url">Download URL</label>
+            <input type="url" id="download_url" name="download_url" placeholder="https://...">
+        </div>
+        <div class="form-group">
+            <label for="checksum_sha256">SHA-256 Checksum</label>
+            <input type="text" id="checksum_sha256" name="checksum_sha256" placeholder="Optional file checksum">
+        </div>
+        <div class="form-group">
+            <label for="changelog">Changelog</label>
+            <textarea id="changelog" name="changelog" rows="4"></textarea>
+        </div>
+        <div class="form-group form-check">
+            <input type="checkbox" id="is_mandatory" name="is_mandatory" value="1">
+            <label for="is_mandatory">Mandatory update</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Publish Release</button>
+        <a href="/admin/releases" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

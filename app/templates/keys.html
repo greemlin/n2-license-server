@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}License Keys — N2 License Server{% endblock %}
+{% block page_title %}License Keys{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <a href="/admin/keys/new" class="btn btn-primary">Create Key</a>
+</div>
+
+<div class="card">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Key</th>
+                <th>Edition</th>
+                <th>Limit</th>
+                <th>Grace Days</th>
+                <th>Activations</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key in keys %}
+            <tr>
+                <td><a href="/admin/keys/{{ key.id }}">{{ key.key_text }}</a></td>
+                <td>{{ key.edition }}</td>
+                <td>{{ key.activation_limit }}</td>
+                <td>{{ key.offline_grace_days }}</td>
+                <td>{{ key.activation_count }}</td>
+                <td>
+                    {% if key.revoked %}
+                    <span class="badge badge-danger">Revoked</span>
+                    {% else %}
+                    <span class="badge badge-success">Active</span>
+                    {% endif %}
+                </td>
+                <td>{{ key.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if not key.revoked %}
+                    <form method="post" action="/admin/keys/{{ key.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this key? All linked installations will be locked.');">
+                        <button type="submit" class="btn btn-danger btn-sm">Revoke</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not keys %}
+    <p class="muted">No license keys yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Installations — N2 License Server{% endblock %}
+{% block page_title %}Installations{% endblock %}
+
+{% block content %}
+<div class="card">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Installation ID</th>
+                <th>Fingerprint</th>
+                <th>Version</th>
+                <th>Platform</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+                <th>Heartbeat</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inst in installations %}
+            <tr>
+                <td><a href="/admin/installations/{{ inst.installation_id }}">{{ inst.installation_id[:16] }}…</a></td>
+                <td class="mono">{{ inst.machine_fingerprint[:16] }}…</td>
+                <td>{{ inst.app_version or '—' }}</td>
+                <td>{{ inst.platform or '—' }}</td>
+                <td>{{ inst.first_seen_at.strftime('%Y-%m-%d') }}</td>
+                <td>{{ inst.last_seen_at.strftime('%Y-%m-%d %H:%M UTC') if inst.last_seen_at else '—' }}</td>
+                <td>{{ inst.last_heartbeat_at.strftime('%H:%M UTC') if inst.last_heartbeat_at else '—' }}</td>
+                <td>
+                    {% if inst.locked %}
+                    <span class="badge badge-danger">Locked</span>
+                    {% else %}
+                    <span class="badge badge-success">OK</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not installations %}
+    <p class="muted">No installations reported yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

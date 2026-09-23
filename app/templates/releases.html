@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Releases — N2 License Server{% endblock %}
+{% block page_title %}Releases{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <a href="/admin/releases/new" class="btn btn-primary">Create Release</a>
+</div>
+
+<div class="card">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Version</th>
+                <th>Channel</th>
+                <th>Mandatory</th>
+                <th>Published</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for release in releases %}
+            <tr>
+                <td>{{ release.version }}</td>
+                <td>{{ release.channel }}</td>
+                <td>{{ 'Yes' if release.is_mandatory else 'No' }}</td>
+                <td>{{ release.published_at.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if release.revoked_at %}
+                    <span class="badge badge-danger">Revoked</span>
+                    {% else %}
+                    <span class="badge badge-success">Active</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if not release.revoked_at %}
+                    <form method="post" action="/admin/releases/{{ release.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this release?');">
+                        <button type="submit" class="btn btn-danger btn-sm">Revoke</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not releases %}
+    <p class="muted">No releases yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

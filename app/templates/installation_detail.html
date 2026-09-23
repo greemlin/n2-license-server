@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Installation {{ installation.installation_id[:16] }}… — N2 License Server{% endblock %}
+{% block page_title %}Installation Detail{% endblock %}
+
+{% block content %}
+{% if message %}
+<div class="alert alert-success">
+    {{ message }}
+    {% if unlock_code %}
+    <div class="code-block">
+        <code id="unlock-code">{{ unlock_code }}</code>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('unlock-code').innerText)">Copy</button>
+    </div>
+    <p class="muted">Share this code with the customer. It is valid for 48 hours and binds to this installation.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="detail-header">
+        <div>
+            <h2>{{ installation.installation_id }}</h2>
+            <p class="muted">Fingerprint: {{ installation.machine_fingerprint }}</p>
+        </div>
+        <div>
+            {% if installation.locked %}
+            <form method="post" action="/admin/installations/{{ installation.installation_id }}/unlock" class="inline-form">
+                <input type="hidden" name="reason" value="Unlocked by admin">
+                <button type="submit" class="btn btn-success">Unlock</button>
+            </form>
+            {% else %}
+            <form method="post" action="/admin/installations/{{ installation.installation_id }}/lock" class="inline-form" onsubmit="return confirm('Lock this installation?');">
+                <input type="hidden" name="reason" value="Locked by admin">
+                <button type="submit" class="btn btn-danger">Lock</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <dl class="detail-list">
+        <dt>Status</dt>
+        <dd>{% if installation.locked %}<span class="badge badge-danger">Locked</span>{% else %}<span class="badge badge-success">OK</span>{% endif %}</dd>
+        {% if installation.locked_reason %}
+        <dt>Lock Reason</dt>
+        <dd>{{ installation.locked_reason }}</dd>
+        {% endif %}
+        <dt>License Key</dt>
+        <dd>{{ license_key.key_text if license_key else '—' }}</dd>
+        <dt>App Version</dt>
+        <dd>{{ installation.app_version or '—' }}</dd>
+        <dt>Platform</dt>
+        <dd>{{ installation.platform or '—' }}</dd>
+        <dt>First Seen</dt>
+        <dd>{{ installation.first_seen_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+        <dt>Last Seen</dt>
+        <dd>{{ installation.last_seen_at.strftime('%Y-%m-%d %H:%M UTC') if installation.last_seen_at else '—' }}</dd>
+        <dt>Last Heartbeat</dt>
+        <dd>{{ installation.last_heartbeat_at.strftime('%Y-%m-%d %H:%M UTC') if installation.last_heartbeat_at else '—' }}</dd>
+    </dl>
+</div>
+{% endblock %}

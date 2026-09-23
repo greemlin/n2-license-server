@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Key {{ key.key_text }} — N2 License Server{% endblock %}
+{% block page_title %}License Key{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="detail-header">
+        <div>
+            <h2>{{ key.key_text }}</h2>
+            <p class="muted">Edition: {{ key.edition }} • Grace: {{ key.offline_grace_days }} days • Limit: {{ key.activation_limit }}</p>
+        </div>
+        <div>
+            {% if key.revoked %}
+            <span class="badge badge-danger">Revoked</span>
+            {% else %}
+            <form method="post" action="/admin/keys/{{ key.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this key? All linked installations will lock.');">
+                <button type="submit" class="btn btn-danger">Revoke Key</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% if key.note %}
+    <p><strong>Note:</strong> {{ key.note }}</p>
+    {% endif %}
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <h3>Activations</h3>
+        {% if activations %}
+        <table class="table">
+            <thead>
+                <tr><th>Installation</th><th>Fingerprint</th><th>Activated</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {% for act in activations %}
+                <tr>
+                    <td><a href="/admin/installations/{{ act.installation_id }}">{{ act.installation_id[:16] }}…</a></td>
+                    <td class="mono">{{ act.machine_fingerprint[:16] }}…</td>
+                    <td>{{ act.activated_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+                    <td>{{ act.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No activations yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Installations</h3>
+        {% if installations %}
+        <table class="table">
+            <thead>
+                <tr><th>Installation</th><th>Last Seen</th><th>Locked</th></tr>
+            </thead>
+            <tbody>
+                {% for inst in installations %}
+                <tr>
+                    <td><a href="/admin/installations/{{ inst.installation_id }}">{{ inst.installation_id[:16] }}…</a></td>
+                    <td>{{ inst.last_seen_at.strftime('%Y-%m-%d %H:%M UTC') if inst.last_seen_at else '—' }}</td>
+                    <td>{{ 'Yes' if inst.locked else 'No' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No installations reported yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

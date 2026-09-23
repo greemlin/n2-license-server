@@ -1,0 +1,13 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "TRY", "PLR", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/admin.py" = ["B008"]
+"app/api.py" = ["B008"]
+"app/**" = ["E712", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "TRY003", "TRY300", "S104", "S105"]
+"_smoke_full.py" = ["S101", "S105", "PLR2004"]

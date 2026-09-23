@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — N2 License Server{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="grid grid-4">
+    <div class="card stat">
+        <div class="stat-value">{{ stats.total_keys }}</div>
+        <div class="stat-label">Total Keys</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value">{{ stats.active_keys }}</div>
+        <div class="stat-label">Active Keys</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value">{{ stats.total_installations }}</div>
+        <div class="stat-label">Installations</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value">{{ stats.online_installations }}</div>
+        <div class="stat-label">Online (24h)</div>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <h3>Recent Heartbeats (24h)</h3>
+        {% if recent_heartbeats %}
+        <table class="table">
+            <thead>
+                <tr><th>Installation</th><th>Version</th><th>Last Beat</th></tr>
+            </thead>
+            <tbody>
+                {% for inst in recent_heartbeats %}
+                <tr>
+                    <td><a href="/admin/installations/{{ inst.installation_id }}">{{ inst.installation_id[:16] }}…</a></td>
+                    <td>{{ inst.app_version or '—' }}</td>
+                    <td>{{ inst.last_heartbeat_at.strftime('%Y-%m-%d %H:%M UTC') if inst.last_heartbeat_at else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No heartbeats in the last 24 hours.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Recent Audit Events</h3>
+        {% if recent_audits %}
+        <table class="table">
+            <thead>
+                <tr><th>Time</th><th>Actor</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+                {% for log in recent_audits %}
+                <tr>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+                    <td>{{ log.actor or 'system' }}</td>
+                    <td>{{ log.action }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No audit events yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
