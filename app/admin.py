@@ -205,7 +205,7 @@ async def list_keys(request: Request, admin: Any = None, db: Session = Depends(g
             "title": "License Keys",
             "admin": admin,
             "keys": keys,
-            "now": datetime.now(UTC),
+            "now": datetime.now(UTC).replace(tzinfo=None),
         },
     )
 
@@ -245,7 +245,7 @@ async def create_key(
     expires_dt: datetime | None = None
     if not never_expires and expires_at:
         try:
-            expires_dt = datetime.strptime(expires_at, "%Y-%m-%d").replace(tzinfo=UTC)
+            expires_dt = datetime.strptime(expires_at, "%Y-%m-%d")
         except ValueError:
             raise HTTPException(status_code=422, detail="Invalid expiration date. Use YYYY-MM-DD.")
 

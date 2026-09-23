@@ -139,18 +139,29 @@ def _get_latest_release(db: Session) -> Release | None:
     )
 
 
+def _utc_now() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(tzinfo=None) if now.tzinfo else now
+
+
+def _normalize_dt(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value.replace(tzinfo=None) if value.tzinfo else value
+
+
 def _key_expired(key: LicenseKey) -> bool:
     if key.expires_at is None:
         return False
-    return datetime.now(UTC) >= key.expires_at
+    return _utc_now() >= _normalize_dt(key.expires_at)
 
 
 def _offline_until(key: LicenseKey) -> datetime:
-    now = datetime.now(UTC)
+    now = _utc_now()
     grace = now + timedelta(days=key.offline_grace_days)
     if key.expires_at is None:
         return grace
-    return min(grace, key.expires_at)
+    return min(grace, _normalize_dt(key.expires_at))
 
 
 # --------------------------------------------------------------------------- #
