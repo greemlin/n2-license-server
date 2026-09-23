@@ -66,11 +66,6 @@ class AdminSession:
         return self.role in ("owner", "admin")
 
 
-def _load_user(username: str) -> AdminUser | None:
-    with SessionLocal() as db:
-        return db.scalar(select(AdminUser).where(AdminUser.username == username))
-
-
 def bootstrap_admin_user() -> None:
     """Create the initial owner from environment variables if no users exist."""
     settings = get_settings()
@@ -102,19 +97,18 @@ def get_current_admin(request: Request) -> AdminSession | None:
     username = data.get("username")
     if not username:
         return None
-    user = _load_user(username)
-    if user is None or not user.is_active or user.is_deleted:
-        return None
-    user.last_login_at = datetime.now(UTC)
     with SessionLocal() as db:
-        db.add(user)
+        user = db.scalar(select(AdminUser).where(AdminUser.username == username))
+        if user is None or not user.is_active or user.is_deleted:
+            return None
+        user.last_login_at = datetime.now(UTC)
         db.commit()
-    return AdminSession(
-        username=user.username,
-        role=user.role,
-        otp_enabled=user.otp_enabled,
-        is_active=user.is_active,
-    )
+        return AdminSession(
+            username=user.username,
+            role=user.role,
+            otp_enabled=user.otp_enabled,
+            is_active=user.is_active,
+        )
 
 
 def create_pending_otp_token(response: Response, username: str, secure: bool = True) -> None:
