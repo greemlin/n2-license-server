@@ -18,6 +18,7 @@
                 <th>Grace Days</th>
                 <th>Expires</th>
                 <th>Activations</th>
+                <th>Used / Limit</th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -42,6 +43,7 @@
                     {% endif %}
                 </td>
                 <td>{{ key.activation_count }}</td>
+                <td>{{ key.activation_count }} / {{ key.activation_limit }}</td>
                 <td>
                     {% if key.revoked %}
                     <span class="badge badge-danger">Revoked</span>

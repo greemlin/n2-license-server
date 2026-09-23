@@ -93,13 +93,23 @@ def get_db() -> Any:
 
 
 def _generate_key_text() -> str:
-    """Generate a human-readable license key."""
+    """Generate a non-predictable, high-entropy license key with checksum."""
     import os
 
+    settings = get_settings()
+    prefix = settings.key_prefix or "THAL"
     alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-    parts = ["THAL"]
-    for _ in range(4):
-        parts.append("".join([alphabet[int(b) % 32] for b in os.urandom(4)]))
+    size = len(alphabet)
+
+    payload = ""
+    for _ in range(25):
+        payload += alphabet[int.from_bytes(os.urandom(1), "big") % size]
+
+    checksum = sum(alphabet.index(ch) for ch in payload) % size
+    parts = [prefix]
+    for i in range(0, 25, 5):
+        parts.append(payload[i : i + 5])
+    parts.append(alphabet[checksum])
     return "-".join(parts)
 
 
@@ -445,6 +455,73 @@ async def view_key(
             "installations": installations,
         },
     )
+
+
+@router.get("/keys/{key_id}/edit", response_class=HTMLResponse)
+@admin_required
+async def edit_key_page(
+    request: Request,
+    key_id: str,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    key = db.get(LicenseKey, key_id)
+    if not key:
+        raise HTTPException(status_code=404, detail="Key not found")
+    return templates.TemplateResponse(
+        request,
+        "key_edit.html",
+        {
+            "request": request,
+            "title": "Edit License Key",
+            "admin": admin,
+            "key": key,
+        },
+    )
+
+
+@router.post("/keys/{key_id}/edit")
+@admin_required
+async def edit_key(
+    request: Request,
+    key_id: str,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+    activation_limit: int = Form(1),
+    offline_grace_days: int = Form(10),
+    expires_at: str = Form(""),
+    never_expires: str = Form(""),
+    label: str = Form(""),
+    note: str = Form(""),
+) -> Any:
+    key = db.get(LicenseKey, key_id)
+    if not key:
+        raise HTTPException(status_code=404, detail="Key not found")
+
+    expires_dt: datetime | None = None
+    if not never_expires and expires_at:
+        try:
+            expires_dt = datetime.strptime(expires_at, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid expiration date. Use YYYY-MM-DD.") from exc
+
+    key.activation_limit = max(activation_limit, 1)
+    key.offline_grace_days = max(offline_grace_days, 1)
+    key.expires_at = expires_dt
+    key.label = label or None
+    key.note = note or None
+    db.commit()
+
+    expiry_text = "never" if key.expires_at is None else key.expires_at.strftime("%Y-%m-%d")
+    log_audit(
+        "key_updated",
+        actor=admin.username,
+        entity_type="license_key",
+        entity_id=key.id,
+        ip_address=_get_client_ip(request),
+        details=f"limit={key.activation_limit}, grace={key.offline_grace_days}, expires={expiry_text}",
+    )
+    return RedirectResponse(url=f"/admin/keys/{key.id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/keys/{key_id}/revoke")

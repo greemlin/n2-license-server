@@ -12,10 +12,14 @@
                 Edition: {{ key.edition }}
                 • Grace: {{ key.offline_grace_days }} days
                 • Limit: {{ key.activation_limit }}
+                • Used: {{ key.activation_count }} / {{ key.activation_limit }}
                 • Expires: {% if key.expires_at %}{{ key.expires_at.strftime('%Y-%m-%d') }}{% else %}Never{% endif %}
             </p>
         </div>
         <div>
+            {% if not key.revoked %}
+            <a href="/admin/keys/{{ key.id }}/edit" class="btn btn-secondary">Edit</a>
+            {% endif %}
             {% if key.revoked %}
             <span class="badge badge-danger">Revoked</span>
             {% else %}

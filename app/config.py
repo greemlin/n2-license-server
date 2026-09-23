@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     default_activation_limit: int = 1
     client_rate_limit_per_minute: int = 60
 
+    # Branding / product
+    product_name: str = "ThaliaNET"
+    key_prefix: str = "THAL"
+
     # Optional external integrations
     sentry_dsn: str | None = None
 

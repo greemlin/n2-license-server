@@ -8,7 +8,12 @@
     <form method="post" action="/admin/keys">
         <div class="form-group">
             <label for="edition">Edition</label>
-            <input type="text" id="edition" name="edition" value="standard">
+            <select id="edition" name="edition">
+                <option value="standard" selected>Standard</option>
+                <option value="professional">Professional</option>
+                <option value="enterprise">Enterprise</option>
+                <option value="trial">Trial</option>
+            </select>
         </div>
         <div class="form-row">
             <div class="form-group">
