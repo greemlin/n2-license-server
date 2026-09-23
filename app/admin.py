@@ -14,9 +14,12 @@ from sqlalchemy.orm import Session
 
 from app.auth import (
     admin_required,
+    clear_pending_otp,
     clear_session,
+    create_pending_otp_token,
     create_session,
     get_current_admin,
+    get_pending_otp_username,
     log_audit,
     verify_password,
 )
@@ -29,6 +32,7 @@ from app.crypto import (
 )
 from app.database import SessionLocal
 from app.models import (
+    AdminUser,
     AuditLog,
     Installation,
     LicenseActivation,
@@ -142,7 +146,6 @@ def login_submit(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ) -> Any:
-    settings = get_settings()
     ip_address = _get_client_ip(request)
 
     if _login_blocked(db, ip_address, username):
@@ -159,42 +162,102 @@ def login_submit(
             status_code=429,
         )
 
-    expected_hash = settings.admin_password_hash
-    if not expected_hash:
+    user = db.scalar(select(AdminUser).where(AdminUser.username == username))
+    if user is None or user.is_deleted or not verify_password(password, user.password_hash):
+        _record_login_attempt(db, ip_address, username, False)
+        log_audit(
+            "admin_login_failed",
+            actor=username,
+            ip_address=ip_address,
+        )
         return templates.TemplateResponse(
             request,
             "login.html",
             {
                 "request": request,
-                "error": "Admin account is not configured. Set ADMIN_PASSWORD_HASH first.",
+                "error": "Invalid username or password.",
                 "title": "Admin Login",
+                "blocked": _login_blocked(db, ip_address, username),
             },
-            status_code=500,
+            status_code=401,
         )
 
-    if username == settings.admin_username and verify_password(password, expected_hash):
-        _record_login_attempt(db, ip_address, username, True)
-        redirect = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
-        create_session(redirect, username, secure=request.url.scheme == "https")
+    if not user.is_active:
+        _record_login_attempt(db, ip_address, username, False)
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "request": request,
+                "error": "Account is disabled.",
+                "title": "Admin Login",
+                "blocked": False,
+            },
+            status_code=403,
+        )
+
+    _record_login_attempt(db, ip_address, username, True)
+
+    if user.otp_enabled and user.otp_secret:
+        redirect = RedirectResponse(url="/admin/login/2fa", status_code=status.HTTP_303_SEE_OTHER)
+        create_pending_otp_token(redirect, username, secure=request.url.scheme == "https")
         return redirect
 
-    _record_login_attempt(db, ip_address, username, False)
-    log_audit(
-        "admin_login_failed",
-        actor=username,
-        ip_address=ip_address,
-    )
+    redirect = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    create_session(redirect, username, secure=request.url.scheme == "https")
+    return redirect
+
+
+@router.get("/login/2fa", response_class=HTMLResponse, response_model=None)
+def login_2fa_page(request: Request, error: str = "") -> Any:
+    username = get_pending_otp_username(request)
+    if not username:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
         request,
-        "login.html",
+        "login_2fa.html",
         {
             "request": request,
-            "error": "Invalid username or password.",
-            "title": "Admin Login",
-            "blocked": _login_blocked(db, ip_address, username),
+            "error": error,
+            "title": "Two-Factor Authentication",
         },
-        status_code=401,
     )
+
+
+@router.post("/login/2fa")
+@login_limiter.limit("10/minute")
+def login_2fa_submit(
+    request: Request,
+    code: str = Form(...),
+    db: Session = Depends(get_db),
+) -> Any:
+    import pyotp
+
+    username = get_pending_otp_username(request)
+    if not username:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    user = db.scalar(select(AdminUser).where(AdminUser.username == username))
+    if user is None or not user.otp_enabled or not user.otp_secret:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    totp = pyotp.TOTP(user.otp_secret)
+    if not totp.verify(code.strip(), valid_window=1):
+        return templates.TemplateResponse(
+            request,
+            "login_2fa.html",
+            {
+                "request": request,
+                "error": "Invalid verification code.",
+                "title": "Two-Factor Authentication",
+            },
+            status_code=401,
+        )
+
+    redirect = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    clear_pending_otp(redirect)
+    create_session(redirect, username, secure=request.url.scheme == "https")
+    return redirect
 
 
 @router.get("/logout", response_model=None)

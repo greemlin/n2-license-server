@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Two-Factor Authentication — N2 License Server{% endblock %}
+{% block page_title %}{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="brand">
+            <a href="/" class="n2-logo">
+                <svg viewBox="0 0 144 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs><clipPath id="n2-2fa"><rect x="0" y="15" width="144" height="70"/></clipPath></defs>
+                    <g clip-path="url(#n2-2fa)" stroke="currentColor" stroke-width="18" stroke-linejoin="miter" stroke-linecap="butt" fill="none">
+                        <line x1="10" y1="100" x2="30" y2="0"/>
+                        <path d="M 34 100 L 54 0 L 74 100 L 94 0"/>
+                        <line x1="98" y1="100" x2="118" y2="0"/>
+                    </g>
+                </svg>
+                <span class="n2-wordmark">N2<span class="copper-text">.</span>LICENSE</span>
+            </a>
+        </div>
+        <h2>Two-Factor Authentication</h2>
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/admin/login/2fa">
+            <div class="form-group">
+                <label for="code">6-digit code from your authenticator app</label>
+                <input type="text" id="code" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Verify</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -16,6 +16,7 @@ from starlette.responses import Response
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app import admin, api
+from app.auth import bootstrap_admin_user
 from app.config import get_settings
 from app.crypto import generate_keypair
 from app.database import init_engine
@@ -26,11 +27,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     init_engine(settings)
 
-    # Ensure Ed25519 keys exist.
+    # Ensure Ed25519 keys exist and bootstrap the first admin user.
     private_path = settings.keys_dir / "private.pem"
     public_path = settings.keys_dir / "public.pem"
     if not private_path.exists() or not public_path.exists():
         generate_keypair(private_path, public_path)
+    bootstrap_admin_user()
 
     yield
 
