@@ -4,17 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}N2 License Server{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app">
         {% if admin %}
         <nav class="sidebar">
             <div class="brand">
-                <div class="brand-mark">N2</div>
-                <div class="brand-name">License Server</div>
+                <a href="/admin" class="n2-logo">
+                    <svg viewBox="0 0 144 100" xmlns="http://www.w3.org/2000/svg">
+                        <defs><clipPath id="n2-mark"><rect x="0" y="15" width="144" height="70"/></clipPath></defs>
+                        <g clip-path="url(#n2-mark)" stroke="currentColor" stroke-width="18" stroke-linejoin="miter" stroke-linecap="butt" fill="none">
+                            <line x1="10" y1="100" x2="30" y2="0"/>
+                            <path d="M 34 100 L 54 0 L 74 100 L 94 0"/>
+                            <line x1="98" y1="100" x2="118" y2="0"/>
+                        </g>
+                    </svg>
+                    <span class="n2-wordmark">N2<span class="copper-text">.</span>LICENSE</span>
+                </a>
             </div>
             <ul class="nav">
                 <li><a href="/admin" class="{% if request.url.path == '/admin' %}active{% endif %}">Dashboard</a></li>
@@ -24,7 +35,7 @@
                 <li><a href="/admin/audit" class="{% if request.url.path.startswith('/admin/audit') %}active{% endif %}">Audit Log</a></li>
             </ul>
             <div class="nav-footer">
-                <span>{{ admin.username }}</span>
+                <span class="mono">{{ admin.username }}</span>
                 <a href="/admin/logout">Logout</a>
             </div>
         </nav>

@@ -65,12 +65,41 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 @app.get("/", response_class=HTMLResponse)
 def root() -> HTMLResponse:
     return HTMLResponse(
-        """<html><head><title>N2 License Server</title></head>
-        <body style="font-family:sans-serif;max-width:700px;margin:40px auto">
-            <h1>N2 License Server</h1>
-            <p><a href="/admin">Admin Dashboard</a></p>
-            <p><a href="/api/updates/check?installation_id=demo&current_version=1.0.0">Sample update check</a></p>
-        </body></html>"""
+        """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N2 License Server</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="landing">
+        <a href="/" class="n2-logo" style="font-size:1.5rem;">
+            <svg viewBox="0 0 144 100" xmlns="http://www.w3.org/2000/svg">
+                <defs><clipPath id="n2-landing"><rect x="0" y="15" width="144" height="70"/></clipPath></defs>
+                <g clip-path="url(#n2-landing)" stroke="currentColor" stroke-width="18" stroke-linejoin="miter" stroke-linecap="butt" fill="none">
+                    <line x1="10" y1="100" x2="30" y2="0"/>
+                    <path d="M 34 100 L 54 0 L 74 100 L 94 0"/>
+                    <line x1="98" y1="100" x2="118" y2="0"/>
+                </g>
+            </svg>
+            <span class="n2-wordmark">N2<span class="copper-text">.</span>LICENSE</span>
+        </a>
+        <h1>License &amp; Update Server</h1>
+        <p>Secure Ed25519-signed licensing, heartbeat monitoring, and release distribution for ThaliaMed.</p>
+        <div class="landing-actions">
+            <a href="/admin" class="btn btn-primary">Admin Dashboard</a>
+            <a href="/admin/health" class="btn btn-secondary">Health Check</a>
+        </div>
+        <p class="muted mono" style="margin-top:48px;font-size:0.75rem;">ATHENS, GREECE &middot; N2 SYSTEMS &copy; 2026</p>
+    </div>
+</body>
+</html>"""
     )
 
 

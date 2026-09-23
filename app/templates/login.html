@@ -7,8 +7,17 @@
 <div class="login-container">
     <div class="login-card">
         <div class="brand">
-            <div class="brand-mark">N2</div>
-            <div class="brand-name">License Server</div>
+            <a href="/" class="n2-logo">
+                <svg viewBox="0 0 144 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs><clipPath id="n2-login"><rect x="0" y="15" width="144" height="70"/></clipPath></defs>
+                    <g clip-path="url(#n2-login)" stroke="currentColor" stroke-width="18" stroke-linejoin="miter" stroke-linecap="butt" fill="none">
+                        <line x1="10" y1="100" x2="30" y2="0"/>
+                        <path d="M 34 100 L 54 0 L 74 100 L 94 0"/>
+                        <line x1="98" y1="100" x2="118" y2="0"/>
+                    </g>
+                </svg>
+                <span class="n2-wordmark">N2<span class="copper-text">.</span>LICENSE</span>
+            </a>
         </div>
         <h2>Administrator Login</h2>
         {% if error %}
