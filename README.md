@@ -41,7 +41,7 @@ Your Hetzner server (`46.4.65.32`) already runs Coolify and owns ports `80`/`443
 
 ### 1. Repository
 
-This repository is the application root. Push changes to GitHub and deploy this repo directly in Coolify (no base directory needed).
+This repository is the application root. Push changes to GitHub and deploy this repo directly in Coolify (no base directory needed). The repository is public so Coolify can pull it without extra GitHub App permissions.
 
 ```bash
 git add .
@@ -53,15 +53,13 @@ git push
 
 1. Open your Coolify dashboard.
 2. **Add a new Resource** → **Application**.
-3. Choose **Private Repository** and select this repository (`greemlin/n2-license-server`).
-4. Set **Build Pack** to `Docker Compose`.
-5. The compose file `docker-compose.yml` is already configured for Coolify (internal port `8000`, no host-port binding, persistent volume).
-6. Expose port `8000` (Coolify will route its proxy to this internal port).
-7. Add your domain, for example:
-   - `n2.systems`, or
+3. Choose **Public Repository** and select `greemlin/n2-license-server`.
+4. Set **Build Pack** to `Dockerfile`.
+5. Expose port `8000` (Coolify will route its proxy to this internal port).
+6. Add your domain, for example:
    - `license.n2.systems`
-8. Enable **HTTPS** / **Let's Encrypt**.
-9. Add a **Persistent Volume** mounted at `/app/data` so the SQLite DB and Ed25519 keys survive redeploys.
+7. Enable **HTTPS** / **Let's Encrypt**.
+8. Add a **Persistent Volume** mounted at `/app/data` so the SQLite DB and Ed25519 keys survive redeploys.
 
 ### 3. Environment variables
 
@@ -80,40 +78,39 @@ Copy the values from `env.example` into Coolify's environment tab.
 
 ### 4. DNS
 
-If you use `license.n2.systems`, add an **A record** pointing to `46.4.65.32`.
-If you use `n2.systems` itself, ensure its A record already points to `46.4.65.32`.
+Add an **A record** for `license.n2.systems` pointing to `46.4.65.32`. Keep it DNS-only (grey cloud) in Cloudflare so Let's Encrypt HTTP-01 validation succeeds.
 
 ### 5. Deploy
 
-Click **Deploy** in Coolify. The app should start on internal port `8000` and be reachable at `https://<your-domain>`.
+Click **Deploy** in Coolify. The app builds from the Dockerfile, starts on internal port `8000`, and is reachable at `https://license.n2.systems`.
 
 Verify:
 
 ```bash
-curl https://n2.systems/admin/health
+curl https://license.n2.systems/admin/health
 # expected: {"status":"ok"}
 ```
 
 ### 6. First-run setup
 
-1. Open `https://n2.systems/admin`.
+1. Open `https://license.n2.systems/admin`.
 2. Log in with the username + password from step 3.
 3. The Ed25519 key pair is generated automatically on first start and stored in `/app/data/keys`. Because `/app/data` is a persistent volume, the same keys are kept across redeploys.
 4. Create your first license key from the **License Keys** page.
 
 ### 7. Configure ThaliaMed
 
-In `config/default.toml` (or the production config), point the desktop app to:
+In the desktop app's production config, point it to:
 
 ```toml
 [license]
-server_url = "https://n2.systems"
+server_url = "https://license.n2.systems"
 ```
 
 The app will call:
 
-- `POST https://n2.systems/api/license/sync`
-- `POST https://n2.systems/api/license/ack`
+- `POST https://license.n2.systems/api/license/sync`
+- `POST https://license.n2.systems/api/license/ack`
 
 ## Smoke test
 
