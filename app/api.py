@@ -139,6 +139,20 @@ def _get_latest_release(db: Session) -> Release | None:
     )
 
 
+def _key_expired(key: LicenseKey) -> bool:
+    if key.expires_at is None:
+        return False
+    return datetime.now(UTC) >= key.expires_at
+
+
+def _offline_until(key: LicenseKey) -> datetime:
+    now = datetime.now(UTC)
+    grace = now + timedelta(days=key.offline_grace_days)
+    if key.expires_at is None:
+        return grace
+    return min(grace, key.expires_at)
+
+
 # --------------------------------------------------------------------------- #
 # Endpoints
 # --------------------------------------------------------------------------- #
@@ -171,9 +185,11 @@ def sync_license(
             if key:
                 if key.revoked:
                     status_val = "revoked"
+                elif _key_expired(key):
+                    status_val = "expired"
                 else:
                     status_val = "active"
-                    offline_until = datetime.now(UTC) + timedelta(days=key.offline_grace_days)
+                    offline_until = _offline_until(key)
 
     if req.license_key:
         key_hash = hash_key(req.license_key)
@@ -183,6 +199,8 @@ def sync_license(
             status_val = "invalid_key"
         elif key.revoked:
             status_val = "revoked"
+        elif _key_expired(key):
+            status_val = "expired"
         else:
             existing = db.scalar(
                 select(LicenseActivation).where(
@@ -196,7 +214,7 @@ def sync_license(
                 # refresh activation link
                 inst.license_key_id = key.id
                 status_val = "active"
-                offline_until = datetime.now(UTC) + timedelta(days=key.offline_grace_days)
+                offline_until = _offline_until(key)
             elif key.activation_count >= key.activation_limit:
                 status_val = "limit_exceeded"
             else:
@@ -220,7 +238,7 @@ def sync_license(
                     key.activation_count += 1
                     inst.license_key_id = key.id
                     status_val = "active"
-                    offline_until = datetime.now(UTC) + timedelta(days=key.offline_grace_days)
+                    offline_until = _offline_until(key)
                     db.commit()
 
     # If the installation is explicitly locked by admin, override status.

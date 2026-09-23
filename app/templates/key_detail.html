@@ -8,7 +8,12 @@
     <div class="detail-header">
         <div>
             <h2>{{ key.key_text }}</h2>
-            <p class="muted">Edition: {{ key.edition }} • Grace: {{ key.offline_grace_days }} days • Limit: {{ key.activation_limit }}</p>
+            <p class="muted">
+                Edition: {{ key.edition }}
+                • Grace: {{ key.offline_grace_days }} days
+                • Limit: {{ key.activation_limit }}
+                • Expires: {% if key.expires_at %}{{ key.expires_at.strftime('%Y-%m-%d') }}{% else %}Never{% endif %}
+            </p>
         </div>
         <div>
             {% if key.revoked %}

@@ -16,6 +16,7 @@
                 <th>Edition</th>
                 <th>Limit</th>
                 <th>Grace Days</th>
+                <th>Expires</th>
                 <th>Activations</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -29,10 +30,23 @@
                 <td>{{ key.edition }}</td>
                 <td>{{ key.activation_limit }}</td>
                 <td>{{ key.offline_grace_days }}</td>
+                <td>
+                    {% if key.expires_at %}
+                        {% if key.expires_at <= now %}
+                        <span class="badge badge-danger">{{ key.expires_at.strftime('%Y-%m-%d') }}</span>
+                        {% else %}
+                        {{ key.expires_at.strftime('%Y-%m-%d') }}
+                        {% endif %}
+                    {% else %}
+                    <span class="muted">Never</span>
+                    {% endif %}
+                </td>
                 <td>{{ key.activation_count }}</td>
                 <td>
                     {% if key.revoked %}
                     <span class="badge badge-danger">Revoked</span>
+                    {% elif key.expires_at and key.expires_at <= now %}
+                    <span class="badge badge-warning">Expired</span>
                     {% else %}
                     <span class="badge badge-success">Active</span>
                     {% endif %}

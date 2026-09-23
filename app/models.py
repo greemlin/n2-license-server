@@ -37,6 +37,7 @@ class LicenseKey(Base):
     offline_grace_days: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     activation_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

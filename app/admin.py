@@ -205,6 +205,7 @@ async def list_keys(request: Request, admin: Any = None, db: Session = Depends(g
             "title": "License Keys",
             "admin": admin,
             "keys": keys,
+            "now": datetime.now(UTC),
         },
     )
 
@@ -233,11 +234,20 @@ async def create_key(
     edition: str = Form("standard"),
     activation_limit: int = Form(1),
     offline_grace_days: int = Form(10),
+    expires_at: str = Form(""),
+    never_expires: str = Form(""),
     label: str = Form(""),
     note: str = Form(""),
 ) -> Any:
     activation_limit = max(activation_limit, 1)
     offline_grace_days = max(offline_grace_days, 1)
+
+    expires_dt: datetime | None = None
+    if not never_expires and expires_at:
+        try:
+            expires_dt = datetime.strptime(expires_at, "%Y-%m-%d").replace(tzinfo=UTC)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid expiration date. Use YYYY-MM-DD.")
 
     for _ in range(5):
         key_text = _generate_key_text()
@@ -254,6 +264,7 @@ async def create_key(
         edition=edition,
         activation_limit=activation_limit,
         offline_grace_days=offline_grace_days,
+        expires_at=expires_dt,
         label=label,
         note=note,
     )
@@ -261,13 +272,14 @@ async def create_key(
     db.commit()
     db.refresh(key)
 
+    expiry_text = "never" if key.expires_at is None else key.expires_at.strftime("%Y-%m-%d")
     log_audit(
         "key_created",
         actor=admin.username,
         entity_type="license_key",
         entity_id=key.id,
         ip_address=_get_client_ip(request),
-        details=f"edition={edition}, limit={activation_limit}, grace={offline_grace_days}",
+        details=f"edition={edition}, limit={activation_limit}, grace={offline_grace_days}, expires={expiry_text}",
     )
 
     return RedirectResponse(url=f"/admin/keys/{key.id}", status_code=status.HTTP_303_SEE_OTHER)
