@@ -10,6 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from slowapi.util import get_remote_address
 
 from app import admin, api
@@ -41,10 +42,12 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 app.state.limiter = limiter
 app.add_exception_handler(429, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 if not settings.debug:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
