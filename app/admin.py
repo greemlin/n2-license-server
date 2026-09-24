@@ -352,10 +352,18 @@ async def dashboard(request: Request, admin: Any = None, db: Session = Depends(g
 
 @router.get("/products", response_class=HTMLResponse)
 @admin_required
-async def list_products(request: Request, admin: Any = None, db: Session = Depends(get_db)) -> HTMLResponse:
+async def list_products(request: Request, admin: Any = None, db: Session = Depends(get_db), page: int = Query(1, ge=1), per_page: int = Query(25, ge=10, le=100), q: str = Query("", max_length=128), sort: str = Query("name"), direction: str = Query("asc"), show_deleted: bool = Query(False)) -> HTMLResponse:
     _owner_only(admin)
-    products = db.scalars(select(Product).where(Product.is_deleted == False).order_by(Product.name.asc())).all()
-    return templates.TemplateResponse(request, "products.html", {"request": request, "title": "Products", "admin": admin, "products": products})
+    page, per_page = _paging(page, per_page)
+    sortable: dict[str, Any] = {"name": Product.name, "code": Product.code, "created_at": Product.created_at}
+    sort_column: Any = sortable.get(sort, Product.name)
+    sort_column = sort_column.asc() if direction == "asc" else sort_column.desc()
+    filters = [Product.is_deleted == show_deleted]
+    if q:
+        filters.append((Product.code.contains(q.upper())) | (Product.name.contains(q)) | (Product.description.contains(q)))
+    total = db.scalar(select(func.count(Product.id)).where(*filters)) or 0
+    products = db.scalars(select(Product).where(*filters).order_by(sort_column).offset((page - 1) * per_page).limit(per_page)).all()
+    return templates.TemplateResponse(request, "products.html", {"request": request, "title": "Products", "admin": admin, "products": products, "page": page, "per_page": per_page, "total": total, "q": q, "sort": sort, "direction": direction, "show_deleted": show_deleted})
 
 
 @router.get("/products/new", response_class=HTMLResponse)
@@ -406,6 +414,36 @@ async def enable_product(request: Request, product_id: str, admin: Any = None, d
     db.commit()
     log_audit("product_enabled", actor=admin.username, entity_type="product", entity_id=product.id, ip_address=_get_client_ip(request))
     return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/products/{product_id}/delete")
+@admin_required
+async def delete_product(request: Request, product_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    product = db.get(Product, product_id)
+    if not product or product.code == "THALIANET":
+        raise HTTPException(status_code=400, detail="The default product cannot be deleted")
+    product.is_deleted = True
+    product.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+    product.is_active = False
+    db.commit()
+    log_audit("product_soft_deleted", actor=admin.username, entity_type="product", entity_id=product.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/products/{product_id}/restore")
+@admin_required
+async def restore_product(request: Request, product_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product.is_deleted = False
+    product.deleted_at = None
+    product.is_active = True
+    db.commit()
+    log_audit("product_restored", actor=admin.username, entity_type="product", entity_id=product.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/products?show_deleted=true", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # --------------------------------------------------------------------------- #
