@@ -53,5 +53,18 @@
             </div>
         </main>
     </div>
+    <script>
+    (() => {
+        const cookie = document.cookie.split('; ').find((item) => item.startsWith('n2ls_csrf='));
+        const token = cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : '';
+        document.querySelectorAll('form[method="post"]').forEach((form) => {
+            if (token && !form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden'; input.name = 'csrf_token'; input.value = token;
+                form.appendChild(input);
+            }
+        });
+    })();
+    </script>
 </body>
 </html>

@@ -19,6 +19,7 @@ from app.auth import (
     clear_session,
     create_pending_otp_token,
     create_session,
+    csrf_protect,
     get_current_admin,
     get_pending_otp_username,
     hash_password,
@@ -45,7 +46,7 @@ from app.models import (
     Release,
 )
 
-router = APIRouter(prefix="/admin")
+router = APIRouter(prefix="/admin", dependencies=[Depends(csrf_protect)])
 templates = Jinja2Templates(directory="app/templates")
 login_limiter = Limiter(key_func=get_remote_address)
 MAX_FAILED_LOGIN_ATTEMPTS = 5

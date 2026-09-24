@@ -16,7 +16,7 @@ from starlette.responses import Response
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app import admin, api
-from app.auth import bootstrap_admin_user
+from app.auth import CSRF_COOKIE_NAME, bootstrap_admin_user, new_csrf_token
 from app.config import get_settings
 from app.crypto import generate_keypair
 from app.database import SessionLocal, init_engine
@@ -57,6 +57,18 @@ app.state.limiter = limiter
 app.state.product_name = settings.product_name
 app.add_exception_handler(429, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+class CsrfCookieMiddleware(BaseHTTPMiddleware):
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        if not request.cookies.get(CSRF_COOKIE_NAME):
+            response.set_cookie(CSRF_COOKIE_NAME, new_csrf_token(), httponly=False, secure=request.url.scheme == "https", samesite="lax", max_age=8 * 3600)
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self,
@@ -77,6 +89,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+app.add_middleware(CsrfCookieMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 if not settings.debug:

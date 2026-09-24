@@ -4,16 +4,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import wraps
+from hmac import compare_digest
+from secrets import token_urlsafe
 from typing import Any
 
 import bcrypt
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import SessionLocal
 from app.models import AdminUser, AuditLog
+
+CSRF_COOKIE_NAME = "n2ls_csrf"
+
+
+def new_csrf_token() -> str:
+    return token_urlsafe(32)
+
+
+async def csrf_protect(request: Request) -> None:
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    cookie_token = request.cookies.get(CSRF_COOKIE_NAME, "")
+    form = await request.form()
+    form_token = str(form.get("csrf_token", ""))
+    if not cookie_token or not form_token or not compare_digest(cookie_token, form_token):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
 
 def hash_password(plain: str) -> str:
@@ -192,6 +210,10 @@ def admin_required(func: Any) -> Any:
             from fastapi.responses import RedirectResponse
 
             return RedirectResponse(url="/admin/login", status_code=303)
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and admin.role == "viewer":
+            from fastapi.responses import PlainTextResponse
+
+            return PlainTextResponse("Read-only role", status_code=403)
         kwargs["admin"] = admin
         return await func(*args, **kwargs)
 
