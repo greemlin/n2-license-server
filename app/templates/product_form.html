@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Create Product — N2 License Server{% endblock %}
+{% block page_title %}Create Product{% endblock %}
+{% block content %}<div class="card narrow"><form method="post" action="/admin/products"><div class="form-group"><label for="code">Product Code</label><input id="code" name="code" required maxlength="64" pattern="[A-Za-z0-9_-]+" placeholder="MY_PRODUCT"></div><div class="form-group"><label for="name">Product Name</label><input id="name" name="name" required maxlength="128" placeholder="My Product"></div><div class="form-group"><label for="description">Description</label><textarea id="description" name="description" rows="4"></textarea></div><button class="btn btn-primary" type="submit">Create Product</button><a class="btn btn-secondary" href="/admin/products">Cancel</a></form></div>{% endblock %}

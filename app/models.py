@@ -30,12 +30,26 @@ class AdminUser(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class LicenseKey(Base):
     __tablename__ = "license_keys"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    key_text: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    key_text: Mapped[str] = mapped_column(String(96), unique=True, index=True, nullable=False)
+    product_code: Mapped[str] = mapped_column(String(64), default="THALIANET", nullable=False, index=True)
     label: Mapped[str | None] = mapped_column(String(256), nullable=True)
     edition: Mapped[str] = mapped_column(String(32), default="standard", nullable=False)
     activation_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

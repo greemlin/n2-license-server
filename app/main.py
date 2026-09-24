@@ -19,7 +19,8 @@ from app import admin, api
 from app.auth import bootstrap_admin_user
 from app.config import get_settings
 from app.crypto import generate_keypair
-from app.database import init_engine
+from app.database import SessionLocal, init_engine
+from app.models import Product
 
 
 @asynccontextmanager
@@ -33,6 +34,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not private_path.exists() or not public_path.exists():
         generate_keypair(private_path, public_path)
     bootstrap_admin_user()
+    with SessionLocal() as db:
+        default_product = db.query(Product).filter(Product.code == "THALIANET").first()
+        if default_product is None:
+            db.add(Product(code="THALIANET", name="ThaliaNET", description="Legacy default product"))
+            db.commit()
 
     yield
 

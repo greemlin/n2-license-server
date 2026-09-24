@@ -41,6 +41,7 @@ from app.models import (
     LicenseKey,
     LockOrder,
     LoginAttempt,
+    Product,
     Release,
 )
 
@@ -50,6 +51,7 @@ login_limiter = Limiter(key_func=get_remote_address)
 MAX_FAILED_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 15
 MIN_PASSWORD_LENGTH = 12
+MAX_PRODUCT_CODE_LENGTH = 64
 
 
 # --------------------------------------------------------------------------- #
@@ -344,6 +346,69 @@ async def dashboard(request: Request, admin: Any = None, db: Session = Depends(g
 
 
 # --------------------------------------------------------------------------- #
+# Products
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/products", response_class=HTMLResponse)
+@admin_required
+async def list_products(request: Request, admin: Any = None, db: Session = Depends(get_db)) -> HTMLResponse:
+    _owner_only(admin)
+    products = db.scalars(select(Product).where(Product.is_deleted == False).order_by(Product.name.asc())).all()
+    return templates.TemplateResponse(request, "products.html", {"request": request, "title": "Products", "admin": admin, "products": products})
+
+
+@router.get("/products/new", response_class=HTMLResponse)
+@admin_required
+async def new_product_page(request: Request, admin: Any = None) -> HTMLResponse:
+    _owner_only(admin)
+    return templates.TemplateResponse(request, "product_form.html", {"request": request, "title": "Create Product", "admin": admin, "product": None})
+
+
+@router.post("/products")
+@admin_required
+async def create_product(request: Request, admin: Any = None, db: Session = Depends(get_db), code: str = Form(...), name: str = Form(...), description: str = Form("")) -> Any:
+    _owner_only(admin)
+    code = code.strip().upper()
+    if not code or not code.replace("_", "").replace("-", "").isalnum() or len(code) > MAX_PRODUCT_CODE_LENGTH:
+        raise HTTPException(status_code=422, detail="Invalid product code")
+    if db.scalar(select(Product).where(Product.code == code)):
+        raise HTTPException(status_code=409, detail="Product code already exists")
+    product = Product(code=code, name=name.strip(), description=description.strip() or None)
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    log_audit("product_created", actor=admin.username, entity_type="product", entity_id=product.id, ip_address=_get_client_ip(request), details=code)
+    return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/products/{product_id}/disable")
+@admin_required
+async def disable_product(request: Request, product_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product.is_active = False
+    db.commit()
+    log_audit("product_disabled", actor=admin.username, entity_type="product", entity_id=product.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/products/{product_id}/enable")
+@admin_required
+async def enable_product(request: Request, product_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product.is_active = True
+    db.commit()
+    log_audit("product_enabled", actor=admin.username, entity_type="product", entity_id=product.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --------------------------------------------------------------------------- #
 # License keys
 # --------------------------------------------------------------------------- #
 
@@ -375,17 +440,9 @@ async def list_keys(
 
 @router.get("/keys/new", response_class=HTMLResponse)
 @admin_required
-async def new_key_page(request: Request, admin: Any = None) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request,
-        "key_form.html",
-        {
-            "request": request,
-            "title": "Create License Key",
-            "admin": admin,
-            "key": None,
-        },
-    )
+async def new_key_page(request: Request, admin: Any = None, db: Session = Depends(get_db)) -> HTMLResponse:
+    products = db.scalars(select(Product).where(Product.is_active == True, Product.is_deleted == False).order_by(Product.name.asc())).all()
+    return templates.TemplateResponse(request, "key_form.html", {"request": request, "title": "Create License Key", "admin": admin, "key": None, "products": products})
 
 
 @router.post("/keys")
@@ -394,6 +451,7 @@ async def create_key(
     request: Request,
     admin: Any = None,
     db: Session = Depends(get_db),
+    product_code: str = Form("THALIANET"),
     edition: str = Form("standard"),
     activation_limit: int = Form(1),
     offline_grace_days: int = Form(10),
@@ -402,6 +460,10 @@ async def create_key(
     label: str = Form(""),
     note: str = Form(""),
 ) -> Any:
+    product_code = product_code.strip().upper()
+    product = db.scalar(select(Product).where(Product.code == product_code, Product.is_active == True, Product.is_deleted == False))
+    if product is None:
+        raise HTTPException(status_code=422, detail="Product is not active or does not exist")
     activation_limit = max(activation_limit, 1)
     offline_grace_days = max(offline_grace_days, 1)
 
@@ -424,6 +486,7 @@ async def create_key(
     key = LicenseKey(
         key_hash=key_hash,
         key_text=key_text,
+        product_code=product_code,
         edition=edition,
         activation_limit=activation_limit,
         offline_grace_days=offline_grace_days,
@@ -442,7 +505,7 @@ async def create_key(
         entity_type="license_key",
         entity_id=key.id,
         ip_address=_get_client_ip(request),
-        details=f"edition={edition}, limit={activation_limit}, grace={offline_grace_days}, expires={expiry_text}",
+        details=f"product={product_code}, edition={edition}, limit={activation_limit}, grace={offline_grace_days}, expires={expiry_text}",
     )
 
     return RedirectResponse(url=f"/admin/keys/{key.id}", status_code=status.HTTP_303_SEE_OTHER)
@@ -1126,6 +1189,15 @@ async def audit_log(
 @router.get("/health")
 def admin_health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/ready")
+def admin_ready(db: Session = Depends(get_db)) -> dict[str, str]:
+    settings = get_settings()
+    db.scalar(select(func.count(Product.id)))
+    if not (settings.keys_dir / "private.pem").exists() or not (settings.keys_dir / "public.pem").exists():
+        raise HTTPException(status_code=503, detail="signing_keys_unavailable")
+    return {"status": "ready"}
 
 
 @router.post("/generate-keys")

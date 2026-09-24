@@ -7,6 +7,12 @@
 <div class="card narrow">
     <form method="post" action="/admin/keys">
         <div class="form-group">
+            <label for="product_code">Product</label>
+            <select id="product_code" name="product_code" required>
+                {% for product in products %}<option value="{{ product.code }}">{{ product.name }} ({{ product.code }})</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
             <label for="edition">Edition</label>
             <select id="edition" name="edition">
                 <option value="standard" selected>Standard</option>

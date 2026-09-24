@@ -31,6 +31,8 @@ def _migrate_sqlite(engine: Engine) -> None:
                     default_sql = " DEFAULT 0"
                 elif col.name == "role":
                     default_sql = " DEFAULT 'admin'"
+                elif col.name == "product_code":
+                    default_sql = " DEFAULT 'THALIANET'"
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col.type}{default_sql}"))
             if isinstance(col.type, Boolean):
@@ -39,6 +41,9 @@ def _migrate_sqlite(engine: Engine) -> None:
             elif col.name == "role":
                 with engine.begin() as conn:
                     conn.execute(update(table).where(col.is_(None)).values({col.name: "admin"}))
+            elif col.name == "product_code":
+                with engine.begin() as conn:
+                    conn.execute(update(table).where(col.is_(None)).values({col.name: "THALIANET"}))
 
 
 def init_engine(settings: Settings) -> None:

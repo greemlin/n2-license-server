@@ -29,6 +29,7 @@
             </div>
             <ul class="nav">
                 <li><a href="/admin" class="{% if request.url.path == '/admin' %}active{% endif %}">Dashboard</a></li>
+                <li><a href="/admin/products" class="{% if request.url.path.startswith('/admin/products') %}active{% endif %}">Products</a></li>
                 <li><a href="/admin/keys" class="{% if request.url.path.startswith('/admin/keys') %}active{% endif %}">License Keys</a></li>
                 <li><a href="/admin/installations" class="{% if request.url.path.startswith('/admin/installations') %}active{% endif %}">Installations</a></li>
                 <li><a href="/admin/releases" class="{% if request.url.path.startswith('/admin/releases') %}active{% endif %}">Releases</a></li>

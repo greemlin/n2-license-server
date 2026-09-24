@@ -44,6 +44,7 @@ def get_private_key() -> Ed25519PrivateKey:
 
 class SyncRequest(BaseModel):
     installation_id: str = Field(..., min_length=1, max_length=128)
+    product_code: str = Field(default="THALIANET", min_length=1, max_length=64)
     license_key: str = Field(default="", max_length=128)
     machine_fingerprint: str = Field(..., min_length=1, max_length=256)
     app_version: str | None = Field(default=None, max_length=64)
@@ -52,6 +53,7 @@ class SyncRequest(BaseModel):
 
 class SyncResponse(BaseModel):
     status: str
+    product_code: str
     server_timestamp: str
     offline_until: str
     pending_orders: list[dict[str, Any]]
@@ -194,7 +196,9 @@ def sync_license(
         if existing_activation:
             key = db.get(LicenseKey, existing_activation.license_key_id)
             if key:
-                if key.revoked:
+                if key.product_code != req.product_code:
+                    status_val = "product_mismatch"
+                elif key.revoked:
                     status_val = "revoked"
                 elif _key_expired(key):
                     status_val = "expired"
@@ -208,6 +212,8 @@ def sync_license(
 
         if not key:
             status_val = "invalid_key"
+        elif key.product_code != req.product_code:
+            status_val = "product_mismatch"
         elif key.revoked:
             status_val = "revoked"
         elif _key_expired(key):
@@ -272,6 +278,7 @@ def sync_license(
     server_timestamp = datetime.now(UTC).isoformat()
     response_core: dict[str, Any] = {
         "status": status_val,
+        "product_code": req.product_code,
         "server_timestamp": server_timestamp,
         "offline_until": offline_until.isoformat(),
         "pending_orders": pending_orders,
@@ -283,6 +290,7 @@ def sync_license(
 
     return SyncResponse(
         status=status_val,
+        product_code=req.product_code,
         server_timestamp=server_timestamp,
         offline_until=offline_until.isoformat(),
         pending_orders=pending_orders,

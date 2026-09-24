@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Products — N2 License Server{% endblock %}
+{% block page_title %}Products{% endblock %}
+{% block content %}
+<div class="toolbar"><a href="/admin/products/new" class="btn btn-primary">Create Product</a></div>
+<div class="card"><table class="table"><thead><tr><th>Code</th><th>Name</th><th>Description</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>{% for product in products %}<tr><td class="mono">{{ product.code }}</td><td>{{ product.name }}</td><td>{{ product.description or '—' }}</td><td>{% if product.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-warning">Disabled</span>{% endif %}</td><td>{{ product.created_at.strftime('%Y-%m-%d') }}</td><td>{% if product.is_active %}<form method="post" action="/admin/products/{{ product.id }}/disable"><button class="btn btn-secondary btn-sm">Disable</button></form>{% else %}<form method="post" action="/admin/products/{{ product.id }}/enable"><button class="btn btn-success btn-sm">Enable</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}
