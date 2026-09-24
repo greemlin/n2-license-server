@@ -56,10 +56,11 @@
                 </td>
                 <td>{{ key.created_at.strftime('%Y-%m-%d') }}</td>
                 <td>
-                    {% if not key.revoked %}
-                    <form method="post" action="/admin/keys/{{ key.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this key? All linked installations will be locked.');">
-                        <button type="submit" class="btn btn-danger btn-sm">Revoke</button>
-                    </form>
+                    {% if key.is_deleted %}
+                    <form method="post" action="/admin/keys/{{ key.id }}/restore" class="inline-form"><button type="submit" class="btn btn-success btn-sm">Restore</button></form>
+                    {% else %}
+                    {% if not key.revoked %}<form method="post" action="/admin/keys/{{ key.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this key? All linked installations will be locked.');"><button type="submit" class="btn btn-danger btn-sm">Revoke</button></form>{% endif %}
+                    <form method="post" action="/admin/keys/{{ key.id }}/delete" class="inline-form" onsubmit="return confirm('Move this key to trash?');"><button type="submit" class="btn btn-secondary btn-sm">Delete</button></form>
                     {% endif %}
                 </td>
             </tr>

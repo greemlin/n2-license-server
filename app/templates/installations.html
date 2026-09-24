@@ -17,6 +17,7 @@
                 <th>Last Seen</th>
                 <th>Heartbeat</th>
                 <th>Status</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -30,12 +31,9 @@
                 <td>{{ inst.last_seen_at.strftime('%Y-%m-%d %H:%M UTC') if inst.last_seen_at else '—' }}</td>
                 <td>{{ inst.last_heartbeat_at.strftime('%H:%M UTC') if inst.last_heartbeat_at else '—' }}</td>
                 <td>
-                    {% if inst.locked %}
-                    <span class="badge badge-danger">Locked</span>
-                    {% else %}
-                    <span class="badge badge-success">OK</span>
-                    {% endif %}
+                    {% if inst.is_deleted %}<span class="badge badge-warning">Deleted</span>{% elif inst.locked %}<span class="badge badge-danger">Locked</span>{% else %}<span class="badge badge-success">OK</span>{% endif %}
                 </td>
+                <td>{% if inst.is_deleted %}<form method="post" action="/admin/installations/{{ inst.installation_id }}/restore" class="inline-form"><button class="btn btn-success btn-sm">Restore</button></form>{% else %}<form method="post" action="/admin/installations/{{ inst.installation_id }}/delete" class="inline-form"><button class="btn btn-secondary btn-sm">Delete</button></form>{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

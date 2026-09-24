@@ -36,11 +36,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if not release.revoked_at %}
-                    <form method="post" action="/admin/releases/{{ release.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this release?');">
-                        <button type="submit" class="btn btn-danger btn-sm">Revoke</button>
-                    </form>
-                    {% endif %}
+                    {% if release.is_deleted %}<form method="post" action="/admin/releases/{{ release.id }}/restore" class="inline-form"><button type="submit" class="btn btn-success btn-sm">Restore</button></form>{% else %}{% if not release.revoked_at %}<form method="post" action="/admin/releases/{{ release.id }}/revoke" class="inline-form" onsubmit="return confirm('Revoke this release?');"><button type="submit" class="btn btn-danger btn-sm">Revoke</button></form>{% endif %}<form method="post" action="/admin/releases/{{ release.id }}/delete" class="inline-form"><button type="submit" class="btn btn-secondary btn-sm">Delete</button></form>{% endif %}
                 </td>
             </tr>
             {% endfor %}
