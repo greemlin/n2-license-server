@@ -5,6 +5,7 @@
 
 {% block content %}
 <div class="card">
+    <form method="get" class="table-filters"><input type="search" name="q" value="{{ q }}" placeholder="Filter action, actor, details"><select name="sort"><option value="timestamp">Time</option><option value="action">Action</option><option value="actor">Actor</option></select><select name="direction"><option value="desc">Descending</option><option value="asc">Ascending</option></select><button class="btn btn-secondary" type="submit">Apply</button></form>
     <table class="table">
         <thead>
             <tr>
@@ -32,5 +33,6 @@
     {% if not logs %}
     <p class="muted">No audit events yet.</p>
     {% endif %}
+    {% include "pagination.html" %}
 </div>
 {% endblock %}

@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+import pyotp
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
@@ -20,6 +21,7 @@ from app.auth import (
     create_session,
     get_current_admin,
     get_pending_otp_username,
+    hash_password,
     log_audit,
     verify_password,
 )
@@ -47,6 +49,7 @@ templates = Jinja2Templates(directory="app/templates")
 login_limiter = Limiter(key_func=get_remote_address)
 MAX_FAILED_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 15
+MIN_PASSWORD_LENGTH = 12
 
 
 # --------------------------------------------------------------------------- #
@@ -118,6 +121,17 @@ def _get_client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else ""
+
+
+def _paging(page: int, per_page: int) -> tuple[int, int]:
+    safe_page = max(page, 1)
+    safe_per_page = min(max(per_page, 10), 100)
+    return safe_page, safe_per_page
+
+
+def _owner_only(admin: Any) -> None:
+    if not admin or not admin.is_owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
 
 
 # --------------------------------------------------------------------------- #
@@ -288,19 +302,19 @@ async def dashboard(request: Request, admin: Any = None, db: Session = Depends(g
     now = datetime.now(UTC)
     last_24h = now - timedelta(hours=24)
 
-    total_keys = db.scalar(select(func.count(LicenseKey.id)))
-    active_keys = db.scalar(select(func.count(LicenseKey.id)).where(LicenseKey.revoked == False))
-    revoked_keys = db.scalar(select(func.count(LicenseKey.id)).where(LicenseKey.revoked == True))
-    total_installations = db.scalar(select(func.count(Installation.id)))
+    total_keys = db.scalar(select(func.count(LicenseKey.id)).where(LicenseKey.is_deleted == False))
+    active_keys = db.scalar(select(func.count(LicenseKey.id)).where(LicenseKey.revoked == False, LicenseKey.is_deleted == False))
+    revoked_keys = db.scalar(select(func.count(LicenseKey.id)).where(LicenseKey.revoked == True, LicenseKey.is_deleted == False))
+    total_installations = db.scalar(select(func.count(Installation.id)).where(Installation.is_deleted == False))
     online_installations = db.scalar(
-        select(func.count(Installation.id)).where(Installation.last_heartbeat_at >= last_24h)
+        select(func.count(Installation.id)).where(Installation.last_heartbeat_at >= last_24h, Installation.is_deleted == False)
     )
     locked_installations = db.scalar(
-        select(func.count(Installation.id)).where(Installation.locked == True)
+        select(func.count(Installation.id)).where(Installation.locked == True, Installation.is_deleted == False)
     )
     recent_heartbeats = db.scalars(
         select(Installation)
-        .where(Installation.last_heartbeat_at >= last_24h)
+        .where(Installation.last_heartbeat_at >= last_24h, Installation.is_deleted == False)
         .order_by(Installation.last_heartbeat_at.desc())
         .limit(10)
     ).all()
@@ -336,19 +350,27 @@ async def dashboard(request: Request, admin: Any = None, db: Session = Depends(g
 
 @router.get("/keys", response_class=HTMLResponse)
 @admin_required
-async def list_keys(request: Request, admin: Any = None, db: Session = Depends(get_db)) -> HTMLResponse:
-    keys = db.scalars(select(LicenseKey).order_by(LicenseKey.created_at.desc())).all()
-    return templates.TemplateResponse(
-        request,
-        "keys.html",
-        {
-            "request": request,
-            "title": "License Keys",
-            "admin": admin,
-            "keys": keys,
-            "now": datetime.now(UTC).replace(tzinfo=None),
-        },
-    )
+async def list_keys(
+    request: Request,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=10, le=100),
+    q: str = Query("", max_length=128),
+    sort: str = Query("created_at"),
+    direction: str = Query("desc"),
+    show_deleted: bool = Query(False),
+) -> HTMLResponse:
+    page, per_page = _paging(page, per_page)
+    sortable = {"created_at": LicenseKey.created_at, "edition": LicenseKey.edition, "activation_count": LicenseKey.activation_count, "expires_at": LicenseKey.expires_at}
+    sort_column: Any = sortable.get(sort, LicenseKey.created_at)
+    sort_column = sort_column.asc() if direction == "asc" else sort_column.desc()
+    filters = [LicenseKey.is_deleted == show_deleted]
+    if q:
+        filters.append((LicenseKey.key_text.contains(q)) | (LicenseKey.label.contains(q)))
+    total = db.scalar(select(func.count(LicenseKey.id)).where(*filters)) or 0
+    keys = db.scalars(select(LicenseKey).where(*filters).order_by(sort_column).offset((page - 1) * per_page).limit(per_page)).all()
+    return templates.TemplateResponse(request, "keys.html", {"request": request, "title": "License Keys", "admin": admin, "keys": keys, "now": datetime.now(UTC).replace(tzinfo=None), "page": page, "per_page": per_page, "total": total, "q": q, "sort": sort, "direction": direction, "show_deleted": show_deleted})
 
 
 @router.get("/keys/new", response_class=HTMLResponse)
@@ -576,20 +598,23 @@ async def list_installations(
     request: Request,
     admin: Any = None,
     db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=10, le=100),
+    q: str = Query("", max_length=128),
+    sort: str = Query("last_seen_at"),
+    direction: str = Query("desc"),
+    show_deleted: bool = Query(False),
 ) -> HTMLResponse:
-    installations = db.scalars(
-        select(Installation).order_by(Installation.last_seen_at.desc().nulls_last())
-    ).all()
-    return templates.TemplateResponse(
-        request,
-        "installations.html",
-        {
-            "request": request,
-            "title": "Installations",
-            "admin": admin,
-            "installations": installations,
-        },
-    )
+    page, per_page = _paging(page, per_page)
+    sortable = {"last_seen_at": Installation.last_seen_at, "first_seen_at": Installation.first_seen_at, "app_version": Installation.app_version}
+    sort_column: Any = sortable.get(sort, Installation.last_seen_at)
+    sort_column = sort_column.asc() if direction == "asc" else sort_column.desc()
+    filters = [Installation.is_deleted == show_deleted]
+    if q:
+        filters.append((Installation.installation_id.contains(q)) | (Installation.machine_fingerprint.contains(q)) | (Installation.platform.contains(q)))
+    total = db.scalar(select(func.count(Installation.id)).where(*filters)) or 0
+    installations = db.scalars(select(Installation).where(*filters).order_by(sort_column.nulls_last()).offset((page - 1) * per_page).limit(per_page)).all()
+    return templates.TemplateResponse(request, "installations.html", {"request": request, "title": "Installations", "admin": admin, "installations": installations, "page": page, "per_page": per_page, "total": total, "q": q, "sort": sort, "direction": direction, "show_deleted": show_deleted})
 
 
 @router.get("/installations/{installation_id}", response_class=HTMLResponse)
@@ -725,18 +750,27 @@ async def unlock_installation(
 
 @router.get("/releases", response_class=HTMLResponse)
 @admin_required
-async def list_releases(request: Request, admin: Any = None, db: Session = Depends(get_db)) -> HTMLResponse:
-    releases = db.scalars(select(Release).order_by(Release.published_at.desc())).all()
-    return templates.TemplateResponse(
-        request,
-        "releases.html",
-        {
-            "request": request,
-            "title": "Releases",
-            "admin": admin,
-            "releases": releases,
-        },
-    )
+async def list_releases(
+    request: Request,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=10, le=100),
+    q: str = Query("", max_length=128),
+    sort: str = Query("published_at"),
+    direction: str = Query("desc"),
+    show_deleted: bool = Query(False),
+) -> HTMLResponse:
+    page, per_page = _paging(page, per_page)
+    sortable = {"published_at": Release.published_at, "version": Release.version, "channel": Release.channel}
+    sort_column: Any = sortable.get(sort, Release.published_at)
+    sort_column = sort_column.asc() if direction == "asc" else sort_column.desc()
+    filters = [Release.is_deleted == show_deleted]
+    if q:
+        filters.append((Release.version.contains(q)) | (Release.channel.contains(q)) | (Release.changelog.contains(q)))
+    total = db.scalar(select(func.count(Release.id)).where(*filters)) or 0
+    releases = db.scalars(select(Release).where(*filters).order_by(sort_column).offset((page - 1) * per_page).limit(per_page)).all()
+    return templates.TemplateResponse(request, "releases.html", {"request": request, "title": "Releases", "admin": admin, "releases": releases, "page": page, "per_page": per_page, "total": total, "q": q, "sort": sort, "direction": direction, "show_deleted": show_deleted})
 
 
 @router.get("/releases/new", response_class=HTMLResponse)
@@ -813,6 +847,249 @@ async def revoke_release(
 
 
 # --------------------------------------------------------------------------- #
+# Admin users
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/users", response_class=HTMLResponse)
+@admin_required
+async def list_users(
+    request: Request,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=10, le=100),
+    q: str = Query("", max_length=128),
+    sort: str = Query("created_at"),
+    direction: str = Query("desc"),
+    show_deleted: bool = Query(False),
+) -> HTMLResponse:
+    _owner_only(admin)
+    page, per_page = _paging(page, per_page)
+    sortable = {"created_at": AdminUser.created_at, "username": AdminUser.username, "last_login_at": AdminUser.last_login_at, "role": AdminUser.role}
+    sort_column: Any = sortable.get(sort, AdminUser.created_at)
+    sort_column = sort_column.asc() if direction == "asc" else sort_column.desc()
+    filters = [AdminUser.is_deleted == show_deleted]
+    if q:
+        filters.append((AdminUser.username.contains(q)) | (AdminUser.role.contains(q)))
+    total = db.scalar(select(func.count(AdminUser.id)).where(*filters)) or 0
+    users = db.scalars(select(AdminUser).where(*filters).order_by(sort_column).offset((page - 1) * per_page).limit(per_page)).all()
+    return templates.TemplateResponse(request, "users.html", {"request": request, "title": "Admin Users", "admin": admin, "users": users, "page": page, "per_page": per_page, "total": total, "q": q, "sort": sort, "direction": direction, "show_deleted": show_deleted})
+
+
+@router.get("/users/new", response_class=HTMLResponse)
+@admin_required
+async def new_user_page(request: Request, admin: Any = None) -> HTMLResponse:
+    _owner_only(admin)
+    return templates.TemplateResponse(request, "user_form.html", {"request": request, "title": "Create Admin User", "admin": admin, "user": None})
+
+
+@router.post("/users")
+@admin_required
+async def create_user(
+    request: Request,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form("admin"),
+) -> Any:
+    _owner_only(admin)
+    username = username.strip()
+    if role not in {"admin", "viewer"} or len(password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=422, detail="Invalid role or password must be at least 12 characters")
+    if db.scalar(select(AdminUser).where(AdminUser.username == username)):
+        raise HTTPException(status_code=409, detail="Username already exists")
+    user = AdminUser(username=username, password_hash=hash_password(password), role=role, is_active=True)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    log_audit("user_created", actor=admin.username, entity_type="admin_user", entity_id=user.id, ip_address=_get_client_ip(request), details=f"role={role}")
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/users/{user_id}/edit", response_class=HTMLResponse)
+@admin_required
+async def edit_user_page(request: Request, user_id: str, admin: Any = None, db: Session = Depends(get_db)) -> HTMLResponse:
+    _owner_only(admin)
+    user = db.get(AdminUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return templates.TemplateResponse(request, "user_form.html", {"request": request, "title": "Edit Admin User", "admin": admin, "user": user})
+
+
+@router.post("/users/{user_id}/edit")
+@admin_required
+async def edit_user(
+    request: Request,
+    user_id: str,
+    admin: Any = None,
+    db: Session = Depends(get_db),
+    password: str = Form(""),
+    role: str = Form("admin"),
+    is_active: str = Form(""),
+) -> Any:
+    _owner_only(admin)
+    user = db.get(AdminUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.username == admin.username and (is_active == "" or role != "owner"):
+        raise HTTPException(status_code=422, detail="The owner account cannot be disabled or downgraded")
+    if role not in {"owner", "admin", "viewer"}:
+        raise HTTPException(status_code=422, detail="Invalid role")
+    user.role = role
+    user.is_active = bool(is_active)
+    if password:
+        if len(password) < MIN_PASSWORD_LENGTH:
+            raise HTTPException(status_code=422, detail="Password must be at least 12 characters")
+        user.password_hash = hash_password(password)
+    db.commit()
+    log_audit("user_updated", actor=admin.username, entity_type="admin_user", entity_id=user.id, ip_address=_get_client_ip(request), details=f"role={role}, active={user.is_active}")
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/users/{user_id}/2fa/enable")
+@admin_required
+async def enable_user_2fa(request: Request, user_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    user = db.get(AdminUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.otp_secret = pyotp.random_base32()
+    user.otp_enabled = True
+    db.commit()
+    log_audit("user_2fa_enabled", actor=admin.username, entity_type="admin_user", entity_id=user.id, ip_address=_get_client_ip(request))
+    return templates.TemplateResponse(request, "user_2fa.html", {"request": request, "title": "2FA Enabled", "admin": admin, "user": user, "secret": user.otp_secret, "uri": pyotp.TOTP(user.otp_secret).provisioning_uri(name=user.username, issuer_name="N2 License Server")})
+
+
+@router.post("/users/{user_id}/2fa/disable")
+@admin_required
+async def disable_user_2fa(request: Request, user_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    user = db.get(AdminUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.otp_secret = None
+    user.otp_enabled = False
+    db.commit()
+    log_audit("user_2fa_disabled", actor=admin.username, entity_type="admin_user", entity_id=user.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/users/{user_id}/delete")
+@admin_required
+async def delete_user(request: Request, user_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    user = db.get(AdminUser, user_id)
+    if not user or user.username == admin.username or user.role == "owner":
+        raise HTTPException(status_code=400, detail="Owner accounts cannot be deleted")
+    user.is_deleted = True
+    user.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+    user.is_active = False
+    db.commit()
+    log_audit("user_soft_deleted", actor=admin.username, entity_type="admin_user", entity_id=user.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/users/{user_id}/restore")
+@admin_required
+async def restore_user(request: Request, user_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    _owner_only(admin)
+    user = db.get(AdminUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_deleted = False
+    user.deleted_at = None
+    user.is_active = True
+    db.commit()
+    log_audit("user_restored", actor=admin.username, entity_type="admin_user", entity_id=user.id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/users?show_deleted=true", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --------------------------------------------------------------------------- #
+# Soft delete / restore
+# --------------------------------------------------------------------------- #
+
+
+def _soft_delete_entity(db: Session, entity: Any) -> None:
+    entity.is_deleted = True
+    entity.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
+
+
+@router.post("/keys/{key_id}/delete")
+@admin_required
+async def delete_key(request: Request, key_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    key = db.get(LicenseKey, key_id)
+    if not key:
+        raise HTTPException(status_code=404, detail="Key not found")
+    _soft_delete_entity(db, key)
+    log_audit("key_soft_deleted", actor=admin.username, entity_type="license_key", entity_id=key_id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/keys", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/keys/{key_id}/restore")
+@admin_required
+async def restore_key(request: Request, key_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    key = db.get(LicenseKey, key_id)
+    if not key:
+        raise HTTPException(status_code=404, detail="Key not found")
+    key.is_deleted = False
+    key.deleted_at = None
+    db.commit()
+    log_audit("key_restored", actor=admin.username, entity_type="license_key", entity_id=key_id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/keys?show_deleted=true", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/installations/{installation_id}/delete")
+@admin_required
+async def delete_installation(request: Request, installation_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    inst = db.scalar(select(Installation).where(Installation.installation_id == installation_id))
+    if not inst:
+        raise HTTPException(status_code=404, detail="Installation not found")
+    _soft_delete_entity(db, inst)
+    log_audit("installation_soft_deleted", actor=admin.username, entity_type="installation", entity_id=installation_id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/installations", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/installations/{installation_id}/restore")
+@admin_required
+async def restore_installation(request: Request, installation_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    inst = db.scalar(select(Installation).where(Installation.installation_id == installation_id))
+    if not inst:
+        raise HTTPException(status_code=404, detail="Installation not found")
+    inst.is_deleted = False
+    inst.deleted_at = None
+    db.commit()
+    log_audit("installation_restored", actor=admin.username, entity_type="installation", entity_id=installation_id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/installations?show_deleted=true", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/releases/{release_id}/delete")
+@admin_required
+async def delete_release(request: Request, release_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    release = db.get(Release, release_id)
+    if not release:
+        raise HTTPException(status_code=404, detail="Release not found")
+    _soft_delete_entity(db, release)
+    log_audit("release_soft_deleted", actor=admin.username, entity_type="release", entity_id=release_id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/releases", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/releases/{release_id}/restore")
+@admin_required
+async def restore_release(request: Request, release_id: str, admin: Any = None, db: Session = Depends(get_db)) -> Any:
+    release = db.get(Release, release_id)
+    if not release:
+        raise HTTPException(status_code=404, detail="Release not found")
+    release.is_deleted = False
+    release.deleted_at = None
+    db.commit()
+    log_audit("release_restored", actor=admin.username, entity_type="release", entity_id=release_id, ip_address=_get_client_ip(request))
+    return RedirectResponse(url="/admin/releases?show_deleted=true", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --------------------------------------------------------------------------- #
 # Audit
 # --------------------------------------------------------------------------- #
 
@@ -823,21 +1100,22 @@ async def audit_log(
     request: Request,
     admin: Any = None,
     db: Session = Depends(get_db),
-    limit: int = 100,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=10, le=100),
+    q: str = Query("", max_length=128),
+    sort: str = Query("timestamp"),
+    direction: str = Query("desc"),
 ) -> HTMLResponse:
-    logs = db.scalars(
-        select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit)
-    ).all()
-    return templates.TemplateResponse(
-        request,
-        "audit.html",
-        {
-            "request": request,
-            "title": "Audit Log",
-            "admin": admin,
-            "logs": logs,
-        },
-    )
+    page, per_page = _paging(page, per_page)
+    sortable = {"timestamp": AuditLog.timestamp, "action": AuditLog.action, "actor": AuditLog.actor}
+    sort_column: Any = sortable.get(sort, AuditLog.timestamp)
+    sort_column = sort_column.asc() if direction == "asc" else sort_column.desc()
+    filters = []
+    if q:
+        filters.append((AuditLog.action.contains(q)) | (AuditLog.actor.contains(q)) | (AuditLog.details.contains(q)))
+    total = db.scalar(select(func.count(AuditLog.id)).where(*filters)) or 0
+    logs = db.scalars(select(AuditLog).where(*filters).order_by(sort_column).offset((page - 1) * per_page).limit(per_page)).all()
+    return templates.TemplateResponse(request, "audit.html", {"request": request, "title": "Audit Log", "admin": admin, "logs": logs, "page": page, "per_page": per_page, "total": total, "q": q, "sort": sort, "direction": direction})
 
 
 # --------------------------------------------------------------------------- #

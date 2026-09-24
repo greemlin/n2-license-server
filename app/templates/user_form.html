@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if user else 'Create' }} Admin User — N2 License Server{% endblock %}
+{% block page_title %}{{ 'Edit' if user else 'Create' }} Admin User{% endblock %}
+{% block content %}
+<div class="card narrow"><form method="post" action="{{ '/admin/users/' + user.id + '/edit' if user else '/admin/users' }}">
+<div class="form-group"><label>Username</label><input name="username" required value="{{ user.username if user else '' }}" {% if user %}readonly{% endif %}></div>
+<div class="form-group"><label>{{ 'New password (leave blank to keep current)' if user else 'Password (minimum 12 characters)' }}</label><input type="password" name="password" {% if not user %}required{% endif %} minlength="12"></div>
+<div class="form-group"><label>Role</label><select name="role"><option value="viewer" {% if user and user.role == 'viewer' %}selected{% endif %}>Viewer</option><option value="admin" {% if not user or user.role == 'admin' %}selected{% endif %}>Admin</option><option value="owner" {% if user and user.role == 'owner' %}selected{% endif %}>Owner</option></select></div>
+{% if user %}<label class="form-check"><input type="checkbox" name="is_active" value="1" {% if user.is_active %}checked{% endif %}> Active</label>{% endif %}
+<button class="btn btn-primary" type="submit">Save</button><a class="btn btn-secondary" href="/admin/users">Cancel</a></form>
+{% if user %}<hr><h3>Two-factor authentication</h3><p class="muted">Status: {{ 'Enabled' if user.otp_enabled else 'Disabled' }}</p>{% if user.otp_enabled %}<form method="post" action="/admin/users/{{ user.id }}/2fa/disable"><button class="btn btn-danger">Disable 2FA</button></form>{% else %}<form method="post" action="/admin/users/{{ user.id }}/2fa/enable"><button class="btn btn-secondary">Enable 2FA</button></form>{% endif %}{% endif %}
+</div>
+{% endblock %}

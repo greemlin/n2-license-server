@@ -1,7 +1,7 @@
 """SQLAlchemy database setup."""
 from __future__ import annotations
 
-from sqlalchemy import create_engine
+from sqlalchemy import Boolean, create_engine, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -26,10 +26,19 @@ def _migrate_sqlite(engine: Engine) -> None:
         existing_cols = {c["name"] for c in inspector.get_columns(table_name)} if inspector.has_table(table_name) else set()
         for col in table.columns:
             if col.name not in existing_cols:
+                default_sql = ""
+                if isinstance(col.type, Boolean):
+                    default_sql = " DEFAULT 0"
+                elif col.name == "role":
+                    default_sql = " DEFAULT 'admin'"
                 with engine.begin() as conn:
-                    conn.execute(
-                        text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col.type}")
-                    )
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col.type}{default_sql}"))
+            if isinstance(col.type, Boolean):
+                with engine.begin() as conn:
+                    conn.execute(update(table).where(col.is_(None)).values({col.name: False}))
+            elif col.name == "role":
+                with engine.begin() as conn:
+                    conn.execute(update(table).where(col.is_(None)).values({col.name: "admin"}))
 
 
 def init_engine(settings: Settings) -> None:

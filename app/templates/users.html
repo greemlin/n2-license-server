@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Admin Users — N2 License Server{% endblock %}
+{% block page_title %}Admin Users{% endblock %}
+{% block content %}
+<div class="toolbar"><a href="/admin/users/new" class="btn btn-primary">Create User</a></div>
+<div class="card">
+<form method="get" class="table-filters">
+<input type="search" name="q" value="{{ q }}" placeholder="Filter username or role">
+<select name="sort"><option value="created_at" {% if sort == 'created_at' %}selected{% endif %}>Created</option><option value="username" {% if sort == 'username' %}selected{% endif %}>Username</option><option value="role" {% if sort == 'role' %}selected{% endif %}>Role</option><option value="last_login_at" {% if sort == 'last_login_at' %}selected{% endif %}>Last login</option></select>
+<select name="direction"><option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option><option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option></select>
+<label class="form-check"><input type="checkbox" name="show_deleted" value="true" {% if show_deleted %}checked{% endif %}> Trash</label><button class="btn btn-secondary" type="submit">Apply</button>
+</form>
+<table class="table"><thead><tr><th>Username</th><th>Role</th><th>2FA</th><th>Status</th><th>Last login</th><th>Actions</th></tr></thead><tbody>
+{% for user in users %}<tr><td>{{ user.username }}</td><td>{{ user.role }}</td><td>{{ 'Enabled' if user.otp_enabled else 'Disabled' }}</td><td>{{ 'Deleted' if user.is_deleted else ('Active' if user.is_active else 'Disabled') }}</td><td>{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else '—' }}</td><td>{% if user.is_deleted %}<form method="post" action="/admin/users/{{ user.id }}/restore" class="inline-form"><button class="btn btn-success btn-sm">Restore</button></form>{% else %}<a class="btn btn-secondary btn-sm" href="/admin/users/{{ user.id }}/edit">Edit</a>{% if user.username != admin.username and user.role != 'owner' %}<form method="post" action="/admin/users/{{ user.id }}/delete" class="inline-form"><button class="btn btn-danger btn-sm">Delete</button></form>{% endif %}{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+{% include "pagination.html" %}
+</div>
+{% endblock %}

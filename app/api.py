@@ -133,7 +133,7 @@ def _build_pending_orders(db: Session, installation_id: str) -> list[dict[str, A
 def _get_latest_release(db: Session) -> Release | None:
     return db.scalar(
         select(Release)
-        .where(Release.revoked_at.is_(None))
+        .where(Release.revoked_at.is_(None), Release.is_deleted == False)
         .order_by(Release.published_at.desc())
         .limit(1)
     )
@@ -204,7 +204,7 @@ def sync_license(
 
     if req.license_key:
         key_hash = hash_key(req.license_key)
-        key = db.scalar(select(LicenseKey).where(LicenseKey.key_hash == key_hash))
+        key = db.scalar(select(LicenseKey).where(LicenseKey.key_hash == key_hash, LicenseKey.is_deleted == False))
 
         if not key:
             status_val = "invalid_key"
@@ -252,8 +252,8 @@ def sync_license(
                     offline_until = _offline_until(key)
                     db.commit()
 
-    # If the installation is explicitly locked by admin, override status.
-    if inst.locked:
+    # Deleted installations are retained for audit but cannot run.
+    if inst.is_deleted or inst.locked:
         status_val = "locked"
 
     pending_orders = _build_pending_orders(db, req.installation_id)

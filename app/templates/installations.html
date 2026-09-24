@@ -5,6 +5,7 @@
 
 {% block content %}
 <div class="card">
+    <form method="get" class="table-filters"><input type="search" name="q" value="{{ q }}" placeholder="Filter installation, fingerprint, platform"><select name="sort"><option value="last_seen_at">Last seen</option><option value="first_seen_at">First seen</option><option value="app_version">Version</option></select><select name="direction"><option value="desc">Descending</option><option value="asc">Ascending</option></select><label class="form-check"><input type="checkbox" name="show_deleted" value="true" {% if show_deleted %}checked{% endif %}> Trash</label><button class="btn btn-secondary" type="submit">Apply</button></form>
     <table class="table">
         <thead>
             <tr>
@@ -42,5 +43,6 @@
     {% if not installations %}
     <p class="muted">No installations reported yet.</p>
     {% endif %}
+    {% include "pagination.html" %}
 </div>
 {% endblock %}

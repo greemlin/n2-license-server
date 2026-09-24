@@ -72,8 +72,13 @@ def bootstrap_admin_user() -> None:
     if not settings.admin_username or not settings.admin_password_hash:
         return
     with SessionLocal() as db:
-        existing = db.scalar(select(AdminUser))
+        existing = db.scalar(select(AdminUser).where(AdminUser.username == settings.admin_username))
         if existing is not None:
+            existing.role = "owner"
+            existing.is_active = True
+            existing.is_deleted = False
+            existing.deleted_at = None
+            db.commit()
             return
         user = AdminUser(
             username=settings.admin_username,

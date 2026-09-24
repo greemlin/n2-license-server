@@ -205,6 +205,10 @@ html { scrollbar-width: none; }
 .stat-label { color: var(--muted); font-size: .875rem; font-weight: 500; }
 
 .toolbar { display: flex; justify-content: flex-end; }
+.table-filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+.table-filters input, .table-filters select { padding: 9px 11px; border: 1px solid var(--surface-2); border-radius: 6px; background: var(--bg); color: var(--text); }
+.pagination { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; }
+.pagination .btn { margin-left: 8px; }
 
 .btn {
     display: inline-flex;

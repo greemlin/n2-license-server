@@ -9,6 +9,7 @@
 </div>
 
 <div class="card">
+    <form method="get" class="table-filters"><input type="search" name="q" value="{{ q }}" placeholder="Filter key or customer"><select name="sort"><option value="created_at">Created</option><option value="edition">Edition</option><option value="activation_count">Activations</option><option value="expires_at">Expires</option></select><select name="direction"><option value="desc">Descending</option><option value="asc">Ascending</option></select><label class="form-check"><input type="checkbox" name="show_deleted" value="true" {% if show_deleted %}checked{% endif %}> Trash</label><button class="btn btn-secondary" type="submit">Apply</button></form>
     <table class="table">
         <thead>
             <tr>
@@ -68,5 +69,6 @@
     {% if not keys %}
     <p class="muted">No license keys yet.</p>
     {% endif %}
+    {% include "pagination.html" %}
 </div>
 {% endblock %}

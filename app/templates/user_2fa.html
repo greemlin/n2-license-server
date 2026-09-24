@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}2FA Setup — N2 License Server{% endblock %}
+{% block page_title %}2FA Enabled{% endblock %}
+{% block content %}<div class="card narrow"><h2>Authenticator setup</h2><p>Scan the provisioning URI with an authenticator application, or enter the secret manually.</p><p class="mono">{{ secret }}</p><div class="code-block"><code>{{ uri }}</code></div><p class="alert alert-danger">Save this secret securely. It will not be shown again.</p><a class="btn btn-primary" href="/admin/users/{{ user.id }}/edit">Done</a></div>{% endblock %}
